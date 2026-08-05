@@ -24,6 +24,21 @@
         "policy_adjudicator",
         "output_verifier"
       ]
+    },
+    {
+      "model": "GPT-4o mini",
+      "runtime_model_id": "gpt-4o-mini",
+      "resolved_snapshot": "gpt-4o-mini-2024-07-18",
+      "parameter_size": "not publicly disclosed",
+      "framework": "LangGraph-compatible multi-agent workflow",
+      "runtime": "OpenAI Chat Completions API with Structured Outputs",
+      "roles": [
+        "customer_investigator",
+        "payment_investigator",
+        "fulfillment_investigator",
+        "policy_adjudicator",
+        "output_verifier"
+      ]
     }
   ],
   "orchestration": {
@@ -39,19 +54,21 @@
     "model_sampling_can_modify_verified_fields": false
   },
   "last_model_assisted_run": {
-    "run_id": "run_20260805_162438",
+    "run_id": "run_20260805_170505",
+    "provider": "openai",
     "model_mode": "required",
     "outputs_written": 50,
     "verification_passed": 50,
-    "successful_model_calls": 268,
+    "successful_model_calls": 250,
     "calls_by_model": {
-      "qwen2.5:7b": 168,
-      "llama3:8b": 100
+      "gpt-4o-mini-2024-07-18": 250
     },
     "audit_statuses": {
-      "accept": 263,
-      "review": 5
+      "accept": 195,
+      "review": 55
     },
-    "runtime_failures_after_resume": 0
+    "prompt_tokens": 185016,
+    "completion_tokens": 2799,
+    "runtime_failures": 0
   }
 }

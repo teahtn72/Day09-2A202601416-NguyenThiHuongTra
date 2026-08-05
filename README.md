@@ -247,6 +247,14 @@ python3 run.py --case-concurrency 5 --model-mode required
 
 Các model cần có: `qwen2.5:7b` cho ba investigator và `llama3:8b` cho adjudicator/verifier. Model trả structured audit; deterministic tools và verifier vẫn là nguồn quyết định cuối để tránh hallucination.
 
+Chuyển toàn bộ agent sang OpenAI mà không sửa local runtime:
+
+```bash
+python3 run.py --model-provider openai --model gpt-4o-mini --model-mode required
+```
+
+Key được đọc từ `OPENAI_API_KEY` trong `.env` hoặc environment và không bao giờ được ghi vào trace/output.
+
 Chạy kiểm thử deterministic:
 
 ```bash
