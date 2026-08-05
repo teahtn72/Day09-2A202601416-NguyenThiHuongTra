@@ -16,26 +16,39 @@
 
 Đây là supervisor của toàn bộ hệ thống.
 
-Nhiệm vụ
-Đọc một input case.
-Kiểm tra case_id, claimed_order_id, policy_version.
-Tạo run_id.
-Gọi Data Router để chuẩn bị dữ liệu.
-Giao việc cho ba investigator chạy song song.
-Chờ đủ ba kết quả.
-Handoff kết quả cho Policy Adjudicator.
-Gửi draft sang Verifier.
-Điều phối tối đa 1–2 lượt sửa.
-Ghi trace trạng thái của case.
-Không làm
-Không tự tính payment.
-Không tự phân tích giao hàng.
-Không tự quyết định primary issue.
-Không chứa toàn bộ nội dung CSV trong prompt.
+### Case Orchestrator — luồng và nhiệm vụ
 
-Orchestrator chỉ quản lý trạng thái, không làm thay worker.
+```mermaid
+flowchart TD
+  Start([Input case]) --> Validate["Validate case_id, claimed_order_id, policy_version"]
+  Validate --> CreateRun["Create run_id"]
+  CreateRun --> Route["Call Data Router: build packets"]
+  Route --> Dispatch["Dispatch 3 investigators (parallel)"]
+  Dispatch --> Wait["Wait for 3 reports"]
+  Wait --> Handoff["Handoff bundle to Policy Adjudicator"]
+  Handoff --> Verify["Send draft to Output Verifier"]
+  Verify -->|fail| Correction["Coordinate up to 1–2 correction rounds"]
+  Correction --> Handoff
+  Verify -->|pass| Write["Serialize output (JSON Writer)"]
+  Write --> End([Case complete])
+```
 
-State nên lưu
+Nhiệm vụ theo trình tự (concise):
+
+1. Nhận input case.
+2. Xác thực `case_id`, `claimed_order_id`, `policy_version`.
+3. Tạo `run_id` và khởi tạo state.
+4. Gọi `Data Router` để chuẩn hóa dữ liệu và tạo packets.
+5. Khởi chạy `Customer`, `Payment`, `Fulfillment` investigators song song.
+6. Chờ và thu 3 báo cáo có cấu trúc.
+7. Gửi bundle cho `Policy Adjudicator` để dựng `case_draft`.
+8. Gửi `case_draft` cho `Output Verifier`.
+9. Nếu verifier fail → điều phối tối đa 1–2 vòng sửa nghiệm thu trên các field bị chỉ định.
+10. Nếu verifier pass → gọi `JSON Writer` để ghi file vào `output/`.
+
+Orchestrator quản lý trạng thái đơn giản; ví dụ state mẫu:
+
+```json
 {
   "run_id": "run_20260805_001",
   "case_id": "EC_001",
@@ -45,6 +58,7 @@ State nên lưu
   "retry_count": 0,
   "errors": []
 }
+```
 3.2. Case Data Router
 
 Data Router nên là code/tool xác định, không cần là một LLM agent.
@@ -246,7 +260,7 @@ Tạo seller IDs.
 
 Tóm tắt: hệ thống kết hợp ba luồng chính — điều tra song song bởi các investigator, ra quyết định theo pipeline bởi `Policy Adjudicator`, và kiểm tra độc lập bởi `Output Verifier`. Ghi file kết quả là bước deterministic không cần LLM.
 
-## Luồng (Flows)
+## Luồng
 
 ```mermaid
 flowchart LR
@@ -276,26 +290,26 @@ flowchart LR
 
 - **Output Verifier**: độc lập, chạy các kiểm tra schema, cross-field, evidence, limits, tài chính, và replay deterministic policy để validate; trả `pass` hoặc `fail` với danh sách lỗi kèm patch instructions.
 
-## Bảng: Vai trò và dữ liệu (Table)
+## Bảng: Vai trò và dữ liệu
 
-| Component | Primary Responsibility | Main Inputs | Main Outputs |
+| Thành phần | Nhiệm vụ chính | Đầu vào chính | Đầu ra chính |
 |---|---:|---|---|
-| Orchestrator | Điều phối | case input | run state, trace |
-| Data Router | Truy vấn & chuẩn hóa | CSVs, claimed_order_id | customer/payment/fulfillment packets, canonical index |
-| Customer Investigator | Customer facts | customer packet | customer_report (related_order_ids, repeat_customer) |
-| Payment Investigator | Financial reconciliation | payment packet | payment_report (item_total, payment_total, reconciled, payment_ids) |
-| Fulfillment Investigator | Delivery analysis | fulfillment packet | fulfillment_report (delivered_late, late_handoff_seller_ids, delivery_analysis) |
-| Policy Adjudicator | Policy decision | 3 reports + policy_version | case_draft (primary_issue, secondary_issues, recommended_refund_brl, evidence_ids) |
-| Output Verifier | Validation | case_draft + canonical index | {status: pass|fail, errors[]} |
+| Orchestrator | Điều phối | input case | run state, trace |
+| Data Router | Truy vấn & chuẩn hóa | CSV, claimed_order_id | customer/payment/fulfillment packets, canonical index |
+| Customer Investigator | Khai thác thông tin khách hàng | customer packet | customer_report (related_order_ids, repeat_customer) |
+| Payment Investigator | Đối soát tài chính | payment packet | payment_report (item_total, payment_total, reconciled, payment_ids) |
+| Fulfillment Investigator | Phân tích giao nhận | fulfillment packet | fulfillment_report (delivered_late, late_handoff_seller_ids, delivery_analysis) |
+| Policy Adjudicator | Ra quyết định theo policy | 3 reports + policy_version | case_draft (primary_issue, secondary_issues, recommended_refund_brl, evidence_ids) |
+| Output Verifier | Xác thực kết quả | case_draft + canonical index | {status: pass|fail, errors[]} |
 
-## Quy tắc chính (Concise rules)
+## Quy tắc chính
 
-- Data Router chỉ gửi projection cần thiết cho từng investigator; không chuyển toàn bộ CSV.
-- Các phép tính tiền (cộng, làm tròn) thực hiện bằng code, không bằng LLM.
-- Policy Adjudicator áp dụng một rule engine deterministic theo thứ tự ưu tiên:
+- `Data Router` chỉ gửi projection cần thiết cho từng investigator; không chuyển toàn bộ CSV.
+- Các phép tính tiền (cộng, làm tròn) thực hiện bằng mã/tiện ích, không làm bằng LLM.
+- `Policy Adjudicator` áp dụng engine quy tắc deterministic theo thứ tự ưu tiên sau:
 
 ```text
-priority:
+ưu_tiên:
   1. canceled_order_paid
   2. unavailable_order_paid
   3. late_delivery_seller
@@ -321,18 +335,18 @@ else:
   primary_issue = "unsupported_late_claim"
 ```
 
-## Validation checks (verifier highlights)
+## Kiểm tra (Verifier)
 
-- Schema: required fields, types, timestamps format, `confidence` in [0,1].
-- Cross-field: e.g. `recommended_refund_brl > 0` implies `case_status == action_required`; `primary_issue == valid_split_payment` implies `reconciled == true` and `payment_row_count >= 2` and `recommended_refund_brl == 0`.
-- Evidence: all `evidence_ids` must exist in `canonical_source_index`.
-- Limits: enforce configured maxima (e.g. lists of 3/5/20 items).
-- Financial: recompute `expected = item_total + freight_total` and `difference = payment_total - expected`.
-- Policy replay: run deterministic policy to confirm `primary_issue`.
+- Schema: các trường bắt buộc, kiểu dữ liệu, định dạng timestamp, trường `confidence` trong khoảng [0,1].
+- Kiểm tra chéo: ví dụ `recommended_refund_brl > 0` ⇒ `case_status == action_required`; `primary_issue == valid_split_payment` ⇒ `reconciled == true` và `payment_row_count >= 2` và `recommended_refund_brl == 0`.
+- Bằng chứng: mọi `evidence_ids` phải tồn tại trong `canonical_source_index`.
+- Giới hạn: kiểm tra các ngưỡng cấu hình (ví dụ danh sách 3/5/20 phần tử).
+- Tài chính: tính lại `expected = item_total + freight_total` và `difference = payment_total - expected`.
+- Replay policy: chạy lại hàm policy deterministic để xác nhận `primary_issue`.
 
-## Error routing (short table)
+## Chuyển lỗi
 
-| Error code | Route to |
+| Mã lỗi | Chuyển tới |
 |---|---|
 | CUSTOMER_ID_MISMATCH | Customer Investigator |
 | RELATED_ORDER_INVALID | Customer Investigator |
@@ -345,11 +359,11 @@ else:
 | SCHEMA_ERROR | Policy Adjudicator / Formatter |
 | UNKNOWN_EVIDENCE_ID | Policy Adjudicator |
 
-## Runtime notes
+## Ghi chú vận hành
 
-- Concurrency: run investigators within a case in parallel; limit overall case concurrency (e.g. `MAX_CASE_CONCURRENCY = 5`).
-- Trace: write one JSONL event per agent event (started/completed/verification/etc.), avoid logging prompts or chain-of-thought.
-- Writer: only serialize `output/EC_xxx.json` after verifier `pass`.
+- Song song: chạy các investigators trong cùng một case đồng thời; giới hạn số case chạy cùng lúc (ví dụ `MAX_CASE_CONCURRENCY = 5`).
+- Trace: ghi một sự kiện JSONL cho mỗi event của agent (started/completed/verification), không ghi prompt hoặc chain-of-thought.
+- Ghi file: chỉ serialize `output/EC_xxx.json` khi `Output Verifier` trả `pass`.
 
 ---
 
