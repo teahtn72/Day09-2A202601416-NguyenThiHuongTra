@@ -239,6 +239,14 @@ Mã nguồn nằm trong `src/ecommerce_multiagent/`. Chạy toàn bộ 50 case:
 python3 run.py --case-concurrency 5
 ```
 
+Chạy với lời gọi model Ollama thật (pipeline fail nếu model/server thiếu):
+
+```bash
+python3 run.py --case-concurrency 5 --model-mode required
+```
+
+Các model cần có: `qwen2.5:7b` cho ba investigator và `llama3:8b` cho adjudicator/verifier. Model trả structured audit; deterministic tools và verifier vẫn là nguồn quyết định cuối để tránh hallucination.
+
 Chạy kiểm thử deterministic:
 
 ```bash

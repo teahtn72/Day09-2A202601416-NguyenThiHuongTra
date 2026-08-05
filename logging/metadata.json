@@ -34,7 +34,7 @@
     "max_correction_rounds": 2
   },
   "execution": {
-    "scoring_path": "deterministic_tools",
+    "scoring_path": "model_assisted_deterministic_tools",
     "numeric_runtime": "Python Decimal ROUND_HALF_UP",
     "model_sampling_can_modify_verified_fields": false
   }

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .agents import CustomerInvestigator, FulfillmentInvestigator, PaymentInvestigator, PolicyAdjudicator
+from .model_runtime import OllamaRuntime
 from .repository import OlistRepository
 from .trace import TraceLogger
 from .verifier import OutputVerifier
@@ -19,12 +20,13 @@ class ValidationFailure(RuntimeError):
 class CaseOrchestrator:
     """Supervisor: parallel investigation, sequential policy, correction, and write."""
 
-    def __init__(self, repository: OlistRepository, output_dir: str | Path, trace: TraceLogger, max_corrections: int = 2) -> None:
+    def __init__(self, repository: OlistRepository, output_dir: str | Path, trace: TraceLogger, max_corrections: int = 2, model_runtime: OllamaRuntime | None = None) -> None:
         self.repository = repository
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.trace = trace
         self.max_corrections = max_corrections
+        self.model_runtime = model_runtime or OllamaRuntime("http://127.0.0.1:11434", "off")
         self.customer = CustomerInvestigator()
         self.payment = PaymentInvestigator()
         self.fulfillment = FulfillmentInvestigator()
@@ -39,9 +41,16 @@ class CaseOrchestrator:
             "agent_started",
             input_ref=f"{agent.name.replace('_investigator', '')}_packet:{case_id}",
             model=agent.model_profile,
-            execution_mode="deterministic_tools",
+            execution_mode="model_assisted" if self.model_runtime.enabled else "deterministic_tools",
         )
         report = agent.investigate(packet)
+        audit = self.model_runtime.audit(
+            agent.name,
+            agent.model_profile,
+            {"source_projection": packet, "computed_report": report},
+        )
+        if audit is not None:
+            self.trace.event(case_id, agent.name, "model_call_completed", **audit.trace_summary())
         summary = {"warning_count": len(report.get("warnings", []))}
         if agent.name == "customer_investigator":
             summary.update({"repeat_customer": report["repeat_customer"], "related_order_count": len(report["related_order_ids"])})
@@ -84,11 +93,25 @@ class CaseOrchestrator:
 
         for correction_round in range(self.max_corrections + 1):
             started = time.perf_counter()
-            self.trace.event(case_id, self.policy.name, "agent_started", correction_round=correction_round, model=self.policy.model_profile, execution_mode="deterministic_rule_engine")
+            self.trace.event(case_id, self.policy.name, "agent_started", correction_round=correction_round, model=self.policy.model_profile, execution_mode="model_assisted_rule_engine" if self.model_runtime.enabled else "deterministic_rule_engine")
             draft = self.policy.adjudicate(bundle, case["policy_version"])
+            policy_audit = self.model_runtime.audit(
+                self.policy.name,
+                self.policy.model_profile,
+                {"policy_version": case["policy_version"], "investigation_bundle": bundle, "computed_draft": draft},
+            )
+            if policy_audit is not None:
+                self.trace.event(case_id, self.policy.name, "model_call_completed", **policy_audit.trace_summary())
             self.trace.event(case_id, self.policy.name, "agent_completed", output_summary={"primary_issue": draft["case_assessment"]["primary_issue"], "refund_brl": draft["financial_resolution"]["recommended_refund_brl"]}, duration_ms=round((time.perf_counter() - started) * 1000, 2))
 
             checked = self.verifier.verify(draft, bundle, routed)
+            verifier_audit = self.model_runtime.audit(
+                self.verifier.name,
+                self.verifier.model_profile,
+                {"draft": draft, "deterministic_validation": checked},
+            )
+            if verifier_audit is not None:
+                self.trace.event(case_id, self.verifier.name, "model_call_completed", **verifier_audit.trace_summary())
             if checked["status"] == "pass":
                 self.trace.event(case_id, self.verifier.name, "verification_passed", correction_round=correction_round)
                 self._write(case_path, draft)
