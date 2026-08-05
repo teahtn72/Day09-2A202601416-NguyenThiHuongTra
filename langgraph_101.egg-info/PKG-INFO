@@ -1,3 +1,31 @@
+Metadata-Version: 2.4
+Name: langgraph-101
+Version: 0.1.0
+Summary: Add your description here
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: azure-identity>=1.25.1
+Requires-Dist: deepagents>=0.5.3
+Requires-Dist: grandalf>=0.8
+Requires-Dist: ipython>=9.6.0
+Requires-Dist: langchain>=1.3.10
+Requires-Dist: langchain-anthropic>=1.4.6
+Requires-Dist: langchain-aws>=1.1.0
+Requires-Dist: langchain-mcp-adapters>=0.1.0
+Requires-Dist: langchain-community>=0.4
+Requires-Dist: langchain-google-vertexai>=3.0.3
+Requires-Dist: langchain-openai>=1.1.14
+Requires-Dist: langgraph>=1.0.1
+Requires-Dist: langgraph-cli[inmem]>=0.4.4
+Requires-Dist: langsmith>=0.8.18
+Requires-Dist: notebook>=7.5.6
+Requires-Dist: openai>=2.6.0
+Requires-Dist: openevals>=0.1.0
+Requires-Dist: protobuf>=6.33.0
+Requires-Dist: python-dotenv>=1.2.2
+Requires-Dist: requests>=2.32.5
+Requires-Dist: tavily-python>=0.7.21
+
 # K4 Day 09 - Multi-Agent E-commerce Dispute Resolution
 
 ## 1. Bài toán
@@ -230,22 +258,6 @@ Các timestamp giữ nguyên định dạng trong CSV (`YYYY-MM-DD HH:MM:SS`) ho
 - **Verifier Agent**: kiểm tra ID, số tiền, null handling, array limit và schema trước khi ghi file.
 
 Điểm cốt lõi là nên có phân công, handoff và kiểm chứng giữa các agent; không có điểm cho việc chỉ đặt tên nhiều agent nhưng toàn bộ xử lý nằm trong một prompt duy nhất.
-
-## 7.1. Implementation trong repo
-
-Mã nguồn nằm trong `src/ecommerce_multiagent/`. Chạy toàn bộ 50 case:
-
-```bash
-python3 run.py --case-concurrency 5
-```
-
-Chạy kiểm thử deterministic:
-
-```bash
-PYTHONPATH=src python3 -m unittest discover -s tests -v
-```
-
-Mỗi run xóa các `output/EC_*.json` cũ và truncate `logging/trace.jsonl`, rồi chỉ ghi output đã qua verifier. Kết quả hợp lệ phải có đúng 50 JSON và lệnh chạy trả exit code 0.
 
 ## 8. Nộp bài và chấm điểm
 

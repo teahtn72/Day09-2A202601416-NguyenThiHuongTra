@@ -1,0 +1,41 @@
+{
+  "project": "olist-multiagent-dispute-resolution",
+  "policy_version": "EC_POLICY_V2",
+  "models": [
+    {
+      "model": "Qwen2.5-7B-Instruct",
+      "runtime_model_id": "qwen2.5:7b",
+      "parameter_size": "7B",
+      "framework": "LangGraph-compatible supervisor-worker workflow",
+      "runtime": "Ollama local",
+      "roles": [
+        "customer_investigator",
+        "payment_investigator",
+        "fulfillment_investigator"
+      ]
+    },
+    {
+      "model": "Llama-3-8B-Instruct",
+      "runtime_model_id": "llama3:8b",
+      "parameter_size": "8B",
+      "framework": "LangGraph-compatible adjudication and self-correction workflow",
+      "runtime": "Ollama local",
+      "roles": [
+        "policy_adjudicator",
+        "output_verifier"
+      ]
+    }
+  ],
+  "orchestration": {
+    "pattern": "parallel supervisor-worker -> sequential policy -> independent verification",
+    "framework": "Python 3.11+ explicit state workflow (LangGraph-compatible)",
+    "case_concurrency": 5,
+    "investigator_concurrency_per_case": 3,
+    "max_correction_rounds": 2
+  },
+  "execution": {
+    "scoring_path": "deterministic_tools",
+    "numeric_runtime": "Python Decimal ROUND_HALF_UP",
+    "model_sampling_can_modify_verified_fields": false
+  }
+}

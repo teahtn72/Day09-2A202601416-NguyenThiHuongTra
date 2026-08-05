@@ -1,121 +1,89 @@
-# Member Role Report — Day 9: Multi Agent A2A
-
-> Mỗi thành viên trong nhóm tự hoàn thành mẫu này để báo cáo đúng vai trò, phần việc và mức hiểu của mình. Không sao chép nguyên báo cáo chung hoặc báo cáo của thành viên khác. Thay nội dung trong dấu `[ ]` và xóa các dòng hướng dẫn không cần thiết trước khi nộp.
+# Báo cáo cá nhân — Day 9 Multi-Agent A2A
 
 ## 1. Thông tin cá nhân
 
-| Thông tin       | Nội dung     |
-| --------------- | ------------ |
-| Họ và tên       | [Họ và tên]  |
-| MSSV            | [MSSV]       |
-| Khóa/Lớp        | [K4]         |
-| Vai trò chính   | [Vai trò]    |
-| Ngày hoàn thành | [YYYY-MM-DD] |
+| Thông tin | Nội dung |
+|---|---|
+| Họ và tên | Nguyễn Thị Hương Trà |
+| MSSV | 2A202601416 |
+| Khóa/Lớp | K4 |
+| Vai trò chính | Multi-agent workflow và deterministic verification |
+| Ngày hoàn thành | 2026-08-05 |
 
 ## 2. Vai trò và phạm vi công việc
 
-### Phần việc sở hữu
+| Module/deliverable | File/hàm phụ trách | Input | Output | Trạng thái |
+|---|---|---|---|---|
+| Data routing | `repository.py/OlistRepository.route_case` | input JSON + Olist CSV | ba packet + canonical index | Hoàn thành |
+| Domain investigation | `agents.py` | packet theo domain | ba structured report | Hoàn thành |
+| Policy và verification | `agents.py`, `verifier.py` | investigation bundle + rules | draft + validation errors | Hoàn thành |
+| Orchestration và trace | `orchestrator.py`, `trace.py`, `cli.py` | 50 cases | output JSON + trace JSONL | Hoàn thành |
+| Kiểm thử và tài liệu | `tests/`, `architecture.md` | implementation | test report + kiến trúc | Hoàn thành |
 
-| Module/deliverable | File/hàm phụ trách | Input nhận vào | Output bàn giao   | Trạng thái                            |
-| ------------------ | ------------------ | -------------- | ----------------- | ------------------------------------- |
-| [Phần việc]        | [File/hàm]         | [Input]        | [Output/artifact] | [Hoàn thành/Một phần/Chưa hoàn thành] |
-| [Phần việc]        | [File/hàm]         | [Input]        | [Output/artifact] | [Hoàn thành/Một phần/Chưa hoàn thành] |
+Artifact chính là 50 file `output/EC_001.json` đến `output/EC_050.json`. Lần chạy cuối tạo đủ 50 output, không có failure; trace có 650 events và 50 `verification_passed`.
 
-Chỉ nhận ownership cho phần bạn trực tiếp thực hiện. Liên hệ rõ phần việc của bạn với đầu vào, đầu ra và các thành viên phụ thuộc vào phần đó.
+## 3. Giải thích kỹ thuật
 
-### Việc hỗ trợ ngoài phạm vi chính
+### Vấn đề giải quyết
 
-| Hoạt động                 | Thành viên/module được hỗ trợ | Kết quả                 |
-| ------------------------- | ----------------------------- | ----------------------- |
-| [Debug/tích hợp/tài liệu] | [Tên hoặc module]             | [Kết quả và bằng chứng] |
-
-## 3. Kết quả theo vai trò
-
-| Nhiệm vụ đã thực hiện | File/hàm/artifact liên quan | Kết quả bàn giao          | Cách xác minh   |
-| --------------------- | --------------------------- | ------------------------- | --------------- |
-| [Mô tả cụ thể]        | [Đường dẫn file]            | [Artifact/metrics/report] | [Lệnh/artifact] |
-| [Mô tả cụ thể]        | [Đường dẫn file]            | [Artifact/metrics/report] | [Lệnh/artifact] |
-
-Nêu một output cụ thể mà phần việc của bạn tạo ra hoặc giúp xác minh:
-
-[Mô tả artifact, metric, report hoặc kết quả tích hợp.]
-
-## 4. Giải thích phần kỹ thuật đã thực hiện
-
-### Vấn đề cần giải quyết
-
-[Phần của bạn giải quyết vấn đề gì trong pipeline?]
+Một claim phải join customer, order, item, payment, product và seller, nhưng investigator không nên cùng đọc toàn bộ dữ liệu. Đồng thời policy có priority tuyệt đối nên không thể bỏ phiếu giữa agent. Output có hard constraints về null, ID, array limit, phép tính và thứ tự.
 
 ### Cách triển khai
 
-[Mô tả thuật toán, quy tắc dữ liệu, orchestration hoặc quyết định chính. Không chỉ chép lại tên hàm.]
+Repository nạp CSV thành read-only indexes rồi project đúng field cho từng domain. Ba investigator chạy song song bằng `ThreadPoolExecutor`: Customer dựng lịch sử theo `customer_unique_id`; Payment cộng tiền bằng `Decimal`; Fulfillment tính delivery và handoff bằng datetime. Policy Adjudicator chạy sau barrier, chọn primary issue theo thứ tự `EC_POLICY_V2`, sau đó dựng secondary issue, responsibility, evidence, refund và action.
+
+Verifier không tin draft: nó tính lại tiền và timestamp từ canonical packet, chạy lại policy priority độc lập, kiểm tra cross-field, ID/evidence, timestamp và limit. Lỗi có `field`, `error_code`, `expected`, `actual`, `owner`; Orchestrator chỉ route về owner, tối đa hai vòng. Writer chỉ chạy khi verifier trả `pass`.
 
 ### Input, output và contract
 
-| Thành phần              | Mô tả                                  |
-| ----------------------- | -------------------------------------- |
-| Input                   | [Schema, artifact hoặc tham số]        |
-| Output                  | [Schema, artifact hoặc giá trị trả về] |
-| Module phụ thuộc        | [Module/file liên quan]                |
-| Module sử dụng output   | [Module/file liên quan]                |
-| Điều kiện lỗi cần xử lý | [Trường hợp thực tế]                   |
+| Thành phần | Mô tả |
+|---|---|
+| Input | `input/EC_nnn.json`, `policy_version=EC_POLICY_V2` và 9 CSV Olist |
+| Output | JSON đúng schema tại `output/EC_nnn.json` |
+| Module phụ thuộc | Router → investigators → policy → verifier → writer |
+| Điều kiện lỗi | order/policy không tồn tại, mismatch tài chính, sai priority/evidence/limit/schema |
 
 ### Cách xác minh
 
 ```bash
-[Ghi lệnh thực tế đã chạy]
+PYTHONPATH=src python3 -m unittest discover -s tests -v
+python3 run.py --case-concurrency 5
 ```
 
-- **Kết quả mong đợi:** [Mô tả.]
-- **Kết quả thực tế:** [Mô tả.]
-- **Artifact/log:** [Đường dẫn; không chứa secret.]
+- Kết quả kiểm thử: 3 test pass, gồm đủ sáu nhánh policy, no-item null contract và negative test priority.
+- Kết quả pipeline: `input_cases=50`, `outputs_written=50`, `failures={}`.
+- Artifact: `logging/trace.jsonl`, `logging/metadata.json`, `output/`.
 
-## 5. Một quyết định kỹ thuật quan trọng
+## 4. Quyết định kỹ thuật quan trọng
 
-- **Bối cảnh:** [Vấn đề hoặc lựa chọn cần quyết định.]
-- **Các phương án đã cân nhắc:** [Ít nhất hai phương án.]
-- **Phương án đã chọn:** [Lựa chọn.]
-- **Lý do:** [Trade-off về correctness, data quality, reproducibility, cost hoặc độ phức tạp.]
-- **Bằng chứng quyết định phù hợp:** [Metric, artifact hoặc kết quả thử nghiệm.]
+- **Bối cảnh:** Các phép tính và policy đều có ground truth rõ, trong khi model local có sampling và có thể chưa chạy trên máy chấm.
+- **Phương án cân nhắc:** cho LLM tự tạo toàn bộ JSON; hoặc dùng multi-agent handoff nhưng khóa field kiểm chứng bằng deterministic tools.
+- **Phương án chọn:** Qwen2.5 7B cho investigator profile, Llama 3 8B cho policy/verifier profile; scoring path dùng `Decimal`, datetime, rule engine và independent verifier.
+- **Lý do:** giữ được ownership, routing, trace và self-correction của multi-agent, đồng thời output tái lập và không hallucinate evidence.
+- **Bằng chứng:** 50/50 draft qua verifier; phân phối kết quả phủ đủ 6 primary issue.
 
-## 6. Một lỗi hoặc blocker đã xử lý
+## 5. Lỗi đã xử lý
 
-- **Triệu chứng/lỗi nguyên văn:** [Che toàn bộ secret trước khi ghi.]
-- **Lệnh hoặc bước tái hiện:** [Lệnh/bước.]
-- **Nguyên nhân gốc:** [Root cause, không chỉ mô tả triệu chứng.]
-- **Cách xử lý:** [Thay đổi cụ thể.]
-- **Cách xác minh sau khi sửa:** [Lệnh và kết quả.]
-- **Điều học được:** [Bài học kỹ thuật.]
+- **Triệu chứng:** order `unavailable` có payment nhưng không có item row; nếu coi tổng item là 0 thì có thể tạo `difference_brl` và `reconciled` sai contract.
+- **Nguyên nhân:** công thức số học thông thường không biểu diễn được trạng thái “không có cơ sở đối soát”.
+- **Cách xử lý:** vẫn báo `item_total_brl=0.0`, `freight_total_brl=0.0`, `payment_total_brl` theo nguồn nhưng đặt `expected_total_brl`, `difference_brl`, `reconciled` thành `null`; entity/product/handoff arrays rỗng.
+- **Xác minh:** test `test_no_item_null_contract`; cả 6 unavailable cases qua verifier.
 
-Nếu chưa xử lý xong:
+## 6. Hiểu luồng end-to-end
 
-- **Phạm vi bị ảnh hưởng:** [Module/artifact.]
-- **Những gì đã loại trừ:** [Các giả thuyết đã kiểm tra.]
-- **Bước tiếp theo:** [Hành động có thể kiểm chứng.]
+1. Input cung cấp `claimed_order_id`; Router dùng khóa join để lấy đúng customer, order, items, payments và products, rồi tạo packet tách biệt.
+2. Ba investigator không chia theo từng CSV mà theo nhiệm vụ hoàn chỉnh, vì item–seller–product–delivery phụ thuộc chặt với nhau.
+3. Policy chỉ nhận facts/IDs đã tổng hợp; nó không đọc raw CSV và là nơi duy nhất chọn primary issue.
+4. Verifier khác investigator ở chỗ không tạo kết luận mới mà kiểm chứng draft với canonical facts/rules, sau đó route lỗi theo field owner.
+5. Chạy cùng 50 input và deterministic rules giúp kết quả giữa các lần run so sánh được; trace mới luôn thay trace cũ.
+6. Một case chỉ thành công khi verifier pass và writer ghi atomically. Nếu hết hai vòng sửa, case là `failed_validation` và không có JSON sai.
 
-## 7. Hiểu biết về luồng end-to-end
+## 7. Cam kết
 
-Giải thích ngắn gọn bằng lời của bạn:
+- [x] Báo cáo phản ánh đúng implementation và kết quả đã kiểm chứng.
+- [x] Có thể giải thích luồng end-to-end và ownership từng field.
+- [x] Không ghi thành công cho phần chưa chạy.
+- [x] Không chứa API key, token, raw prompt hoặc chain-of-thought.
 
-1. Dữ liệu đi từ Crossref đến vector index như thế nào?
-2. Evaluation set và ground-truth document IDs dùng để đo retrieval/answer quality ra sao?
-3. Quality checks khác freshness monitoring ở điểm nào trong bài lab?
-4. Vì sao phải dùng cùng test set cho baseline, corrupted và repaired?
-5. Repair được xem là thành công dựa trên artifact và metric nào?
-
-**Câu trả lời:**
-
-[Viết câu trả lời tại đây.]
-
-## 8. Cam kết của thành viên
-
-Đánh dấu sau khi tự kiểm tra:
-
-- [ ] Nội dung báo cáo phản ánh đúng phần việc và mức hiểu của tôi.
-- [ ] Tôi có thể giải thích luồng end-to-end, không chỉ module mình phụ trách.
-- [ ] Tôi không ghi “đã chạy thành công” cho phần chưa được kiểm chứng.
-- [ ] Báo cáo không chứa `.env`, API key, token hoặc secret.
-- [ ] Báo cáo này không phải bản sao nguyên văn của báo cáo nhóm hoặc báo cáo thành viên khác.
-
-**Họ và tên:** [Họ và tên]
-**Ngày xác nhận:** [YYYY-MM-DD]
+**Họ và tên:** Nguyễn Thị Hương Trà  
+**Ngày xác nhận:** 2026-08-05
