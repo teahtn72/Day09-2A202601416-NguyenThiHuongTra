@@ -24,6 +24,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--model-mode", choices=("off", "optional", "required"), default="off")
     result.add_argument("--ollama-url", default="http://127.0.0.1:11434")
     result.add_argument("--model-timeout", type=float, default=300.0)
+    result.add_argument("--resume-failed", action="store_true", help="Keep valid outputs/trace and rerun only cases whose output is missing")
     return result
 
 
@@ -36,11 +37,22 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"No EC_*.json files found in {args.input_dir}")
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    for stale in output_dir.glob("EC_*.json"):
-        stale.unlink()
+    if args.resume_failed:
+        input_paths = [path for path in input_paths if not (output_dir / path.name).is_file()]
+        if not input_paths:
+            print(json.dumps({"status": "nothing_to_resume", "outputs_written": len(list(output_dir.glob('EC_*.json')))}, indent=2))
+            return 0
+    else:
+        for stale in output_dir.glob("EC_*.json"):
+            stale.unlink()
 
     run_id = datetime.now().astimezone().strftime("run_%Y%m%d_%H%M%S")
-    trace = TraceLogger(args.trace, run_id)
+    if args.resume_failed and Path(args.trace).is_file():
+        with Path(args.trace).open(encoding="utf-8") as handle:
+            first = next((json.loads(line) for line in handle if line.strip()), None)
+        if first:
+            run_id = first["run_id"]
+    trace = TraceLogger(args.trace, run_id, truncate=not args.resume_failed)
     repository = OlistRepository(args.data_dir)
     model_runtime = OllamaRuntime(args.ollama_url, args.model_mode, args.model_timeout)
     orchestrator = CaseOrchestrator(repository, output_dir, trace, args.max_corrections, model_runtime)

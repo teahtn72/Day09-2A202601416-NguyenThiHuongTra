@@ -37,5 +37,21 @@
     "scoring_path": "model_assisted_deterministic_tools",
     "numeric_runtime": "Python Decimal ROUND_HALF_UP",
     "model_sampling_can_modify_verified_fields": false
+  },
+  "last_model_assisted_run": {
+    "run_id": "run_20260805_162438",
+    "model_mode": "required",
+    "outputs_written": 50,
+    "verification_passed": 50,
+    "successful_model_calls": 268,
+    "calls_by_model": {
+      "qwen2.5:7b": 168,
+      "llama3:8b": 100
+    },
+    "audit_statuses": {
+      "accept": 263,
+      "review": 5
+    },
+    "runtime_failures_after_resume": 0
   }
 }

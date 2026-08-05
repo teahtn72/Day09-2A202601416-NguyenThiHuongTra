@@ -8,10 +8,11 @@ from typing import Any
 
 
 class TraceLogger:
-    def __init__(self, path: str | Path, run_id: str) -> None:
+    def __init__(self, path: str | Path, run_id: str, truncate: bool = True) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text("", encoding="utf-8")
+        if truncate:
+            self.path.write_text("", encoding="utf-8")
         self.run_id = run_id
         self._lock = threading.Lock()
 

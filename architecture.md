@@ -368,3 +368,9 @@ else:
 ---
 
 Nếu muốn, tôi có thể tiếp tục: 1) tách một bản tóm tắt ngắn cho README, hoặc 2) tạo sơ đồ chi tiết hơn cho từng agent. Bạn muốn gì tiếp theo?
+
+## Model runtime thực tế
+
+Chạy model-assisted dùng `python3 run.py --case-concurrency 5 --model-mode required`. Mỗi investigator gửi projection và computed report sang `qwen2.5:7b`; Policy Adjudicator và Output Verifier gửi structured bundle/draft sang `llama3:8b`. Ollama bị ràng buộc bằng JSON Schema `status/issues`, temperature 0 và seed 42. Model chỉ audit; `Decimal`, datetime, policy engine và canonical verifier vẫn sở hữu field chấm điểm.
+
+Trace event `model_call_completed` ghi model ID, agent, prompt/completion token, duration, số attempt và trạng thái, nhưng không ghi prompt hoặc chain-of-thought. Run gần nhất `run_20260805_162438` có 50 verification pass, 50 output written và 268 structured model calls thành công. Qwen có số call lớn hơn 150 vì 9 case được resume sau khi response giới hạn 80 tokens ban đầu bị cắt; hệ thống strict đã không ghi các case đó cho tới khi constrained JSON Schema pass.
