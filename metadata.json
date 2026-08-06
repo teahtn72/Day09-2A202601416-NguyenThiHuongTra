@@ -8,11 +8,7 @@
       "parameter_size": "7B",
       "framework": "LangGraph-compatible supervisor-worker workflow",
       "runtime": "Ollama local",
-      "roles": [
-        "customer_investigator",
-        "payment_investigator",
-        "fulfillment_investigator"
-      ]
+      "roles": ["customer_investigator", "payment_investigator", "fulfillment_investigator"]
     },
     {
       "model": "Llama-3-8B-Instruct",
@@ -20,10 +16,7 @@
       "parameter_size": "8B",
       "framework": "LangGraph-compatible adjudication and self-correction workflow",
       "runtime": "Ollama local",
-      "roles": [
-        "policy_adjudicator",
-        "output_verifier"
-      ]
+      "roles": ["policy_adjudicator", "output_verifier"]
     },
     {
       "model": "GPT-4o mini",
@@ -32,13 +25,7 @@
       "parameter_size": "not publicly disclosed",
       "framework": "LangGraph-compatible multi-agent workflow",
       "runtime": "OpenAI Chat Completions API with Structured Outputs",
-      "roles": [
-        "customer_investigator",
-        "payment_investigator",
-        "fulfillment_investigator",
-        "policy_adjudicator",
-        "output_verifier"
-      ]
+      "roles": ["customer_investigator", "payment_investigator", "fulfillment_investigator", "policy_adjudicator", "output_verifier"]
     },
     {
       "model": "Qwen3.5-9B",
@@ -48,13 +35,7 @@
       "quantization": "4-bit affine, group size 64",
       "framework": "MLX-VLM 0.6.10 multi-agent audit adapter",
       "runtime": "Hugging Face checkpoint on Apple MLX/Metal",
-      "roles": [
-        "customer_investigator",
-        "payment_investigator",
-        "fulfillment_investigator",
-        "policy_adjudicator",
-        "output_verifier"
-      ],
+      "roles": ["customer_investigator", "payment_investigator", "fulfillment_investigator", "policy_adjudicator", "output_verifier"],
       "weight_sha256": {
         "model-00001-of-00002.safetensors": "a68b87558c6ef43f74c2bd63ce7e9092ceddc3101f3def0030774bae5f42aadd",
         "model-00002-of-00002.safetensors": "b0a770bf8469c7f3f18756a0e0283f1c1174344a83e059a4e483f6af4907352d"
@@ -73,20 +54,15 @@
     "numeric_runtime": "Python Decimal ROUND_HALF_UP",
     "model_sampling_can_modify_verified_fields": false
   },
-  "last_model_assisted_run": {
+  "last_full_model_assisted_run": {
     "run_id": "run_20260805_170505",
     "provider": "openai",
     "model_mode": "required",
     "outputs_written": 50,
     "verification_passed": 50,
     "successful_model_calls": 250,
-    "calls_by_model": {
-      "gpt-4o-mini-2024-07-18": 250
-    },
-    "audit_statuses": {
-      "accept": 195,
-      "review": 55
-    },
+    "calls_by_model": {"gpt-4o-mini-2024-07-18": 250},
+    "audit_statuses": {"accept": 195, "review": 55},
     "prompt_tokens": 185016,
     "completion_tokens": 2799,
     "runtime_failures": 0
@@ -100,10 +76,7 @@
     "outputs_written": 1,
     "verification_passed": 1,
     "successful_model_calls": 5,
-    "audit_statuses": {
-      "accept": 2,
-      "review": 3
-    },
+    "audit_statuses": {"accept": 2, "review": 3},
     "prompt_tokens": 4583,
     "completion_tokens": 118,
     "runtime_failures": 0

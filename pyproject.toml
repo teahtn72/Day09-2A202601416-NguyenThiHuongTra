@@ -28,6 +28,11 @@ dependencies = [
     "tavily-python>=0.7.21",
 ]
 
+[project.optional-dependencies]
+apple-mlx = [
+    "mlx-vlm>=0.6.10,<0.7",
+]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 

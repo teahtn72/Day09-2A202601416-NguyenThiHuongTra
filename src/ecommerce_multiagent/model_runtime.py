@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import ssl
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -64,8 +65,32 @@ def audit_system_prompt(agent: str) -> str:
         "provided structured source projection and computed report. Never invent "
         "orders, payments, sellers, timestamps, refunds, or evidence. Return JSON "
         "only: {\"status\":\"accept\" or \"review\",\"issues\":[short strings]}. "
-        "Use accept when the report is internally consistent with the source."
+        "Use accept when the report is internally consistent with the source. "
+        "Return at most 2 issues, each at most 12 words; do not explain outside JSON."
     )
+
+
+def _parse_audit_json(content: str) -> tuple[str, list[str]]:
+    """Parse a bounded audit object even if a local model adds code fences."""
+    candidate = content.strip()
+    if candidate.startswith("```"):
+        lines = candidate.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        candidate = "\n".join(lines).strip()
+    try:
+        audit = json.loads(candidate)
+    except json.JSONDecodeError:
+        start, end = candidate.find("{"), candidate.rfind("}")
+        if start < 0 or end <= start:
+            raise
+        audit = json.loads(candidate[start : end + 1])
+    status, issues = audit.get("status"), audit.get("issues", [])
+    if status not in {"accept", "review"} or not isinstance(issues, list):
+        raise ValueError(f"invalid structured audit: {audit!r}")
+    return status, [str(value)[:200] for value in issues[:5]]
 
 
 class OllamaRuntime:
@@ -242,4 +267,124 @@ class OpenAIRuntime:
             completion_tokens=None,
             duration_ms=round((time.perf_counter() - started) * 1000, 2),
             attempts=3,
+        )
+
+
+class HuggingFaceMLXRuntime:
+    """Run a downloaded Hugging Face Qwen3.5 checkpoint through MLX-VLM.
+
+    MLX objects are loaded lazily so the deterministic pipeline and unit tests
+    do not require Apple Silicon or the optional MLX dependencies. A lock keeps
+    one shared model safe when case/investigator threads submit audits together.
+    """
+
+    def __init__(
+        self,
+        model_path: str = "models/Qwen3.5-9B-4bit",
+        mode: str = "required",
+        max_tokens: int = 256,
+    ) -> None:
+        if mode not in {"off", "optional", "required"}:
+            raise ValueError(f"Unknown model mode: {mode}")
+        self.model_path = str(Path(model_path))
+        self.mode = mode
+        self.max_tokens = max_tokens
+        self._lock = threading.Lock()
+        self._model: Any | None = None
+        self._processor: Any | None = None
+        self._config: dict[str, Any] | None = None
+
+    @property
+    def enabled(self) -> bool:
+        return self.mode != "off"
+
+    def model_for(self, assigned_model: str) -> str:
+        return self.model_path
+
+    def _load(self) -> None:
+        if self._model is not None:
+            return
+        path = Path(self.model_path)
+        if not path.is_dir():
+            raise ModelRuntimeError(
+                f"Hugging Face model directory does not exist: {path}. "
+                "Download mlx-community/Qwen3.5-9B-4bit first."
+            )
+        try:
+            from mlx_vlm import load
+            from mlx_vlm.utils import load_config
+        except ImportError as exc:
+            raise ModelRuntimeError(
+                "mlx-vlm is required for the Hugging Face MLX provider; "
+                "install the 'apple-mlx' project extra"
+            ) from exc
+        self._model, self._processor = load(str(path))
+        self._config = load_config(path)
+
+    def _generate(self, agent: str, payload: dict[str, Any]) -> Any:
+        from mlx_vlm import generate
+        from mlx_vlm.prompt_utils import apply_chat_template
+
+        messages = [
+            {"role": "system", "content": audit_system_prompt(agent)},
+            {
+                "role": "user",
+                "content": json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            },
+        ]
+        prompt = apply_chat_template(
+            self._processor,
+            self._config,
+            messages,
+            num_images=0,
+            enable_thinking=False,
+        )
+        return generate(
+            self._model,
+            self._processor,
+            prompt,
+            image=None,
+            verbose=False,
+            temperature=0.0,
+            max_tokens=self.max_tokens,
+        )
+
+    def audit(self, agent: str, model: str, payload: dict[str, Any]) -> ModelAudit | None:
+        if not self.enabled:
+            return None
+        started = time.perf_counter()
+        last_error: Exception | None = None
+        # MLX generation uses shared Metal/model state, so load and generation
+        # are deliberately serialized while the surrounding agent workflow stays concurrent.
+        with self._lock:
+            for attempt in range(1, 3):
+                try:
+                    self._load()
+                    result = self._generate(agent, payload)
+                    status, issues = _parse_audit_json(result.text)
+                    return ModelAudit(
+                        model=model,
+                        provider="huggingface-mlx",
+                        status=status,
+                        issues=issues,
+                        prompt_tokens=getattr(result, "prompt_tokens", None),
+                        completion_tokens=getattr(result, "generation_tokens", None),
+                        duration_ms=round((time.perf_counter() - started) * 1000, 2),
+                        attempts=attempt,
+                    )
+                except Exception as exc:  # Optional runtime errors are recorded in trace.
+                    last_error = exc
+        if self.mode == "required":
+            raise ModelRuntimeError(
+                f"{agent} could not call local Hugging Face model {model} after 2 attempts: {last_error}"
+            ) from last_error
+        return ModelAudit(
+            model=model,
+            provider="huggingface-mlx",
+            status="runtime_error",
+            issues=[str(last_error)[:200]],
+            prompt_tokens=None,
+            completion_tokens=None,
+            duration_ms=round((time.perf_counter() - started) * 1000, 2),
+            attempts=2,
         )

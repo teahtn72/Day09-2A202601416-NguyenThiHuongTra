@@ -6,6 +6,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from .utils import decimal, money
+
 
 class DataError(ValueError):
     pass
@@ -62,6 +64,8 @@ class OlistRepository:
             raise DataError(f"Unsupported policy_version: {case['policy_version']}")
         if not case["customer_request"].get("claimed_order_id"):
             raise DataError("customer_request.claimed_order_id is required")
+        if not case["customer_request"].get("message"):
+            raise DataError("customer_request.message is required")
         return case
 
     def route_case(self, case: dict[str, Any]) -> dict[str, Any]:
@@ -96,6 +100,13 @@ class OlistRepository:
                 for row in related
             ],
         }
+        item_total = sum((decimal(row["price"]) for row in item_rows), decimal(0))
+        freight_total = sum((decimal(row["freight_value"]) for row in item_rows), decimal(0))
+        payment_total = sum((decimal(row["payment_value"]) for row in payment_rows), decimal(0))
+        expected_total = item_total + freight_total if item_rows else None
+        difference = payment_total - expected_total if expected_total is not None else None
+        reconciled = abs(difference) <= decimal("0.10") if difference is not None else None
+
         payment_packet = {
             "case_id": case_id,
             "order_id": order_id,
@@ -144,10 +155,34 @@ class OlistRepository:
         item_ids = [f"{order_id}:{row['order_item_id']}" for row in item_rows]
         payment_ids = [f"{order_id}:{row['payment_sequential']}" for row in payment_rows]
         seller_ids = list(dict.fromkeys(row["seller_id"] for row in item_rows))
+        claim_packet = {
+            "case_id": case_id,
+            "claimed_order_id": order_id,
+            "customer_request": {
+                "language": case["customer_request"].get("language"),
+                "message": case["customer_request"]["message"],
+            },
+            "order": {
+                "order_id": order_id,
+                "order_status": order["order_status"],
+                "order_delivered_customer_date": order["order_delivered_customer_date"] or None,
+                "order_estimated_delivery_date": order["order_estimated_delivery_date"] or None,
+                "order_delivered_carrier_date": order["order_delivered_carrier_date"] or None,
+            },
+            "item_row_count": len(item_rows),
+            "payment_row_count": len(payment_rows),
+            "item_total_brl": money(item_total),
+            "freight_total_brl": money(freight_total),
+            "payment_total_brl": money(payment_total),
+            "expected_total_brl": money(expected_total) if expected_total is not None else None,
+            "difference_brl": money(difference) if difference is not None else None,
+            "reconciled": reconciled,
+        }
         return {
             "customer_packet": customer_packet,
             "payment_packet": payment_packet,
             "fulfillment_packet": fulfillment_packet,
+            "claim_packet": claim_packet,
             "canonical_source_index": {
                 "valid_order_ids": [order_id],
                 "valid_item_ids": item_ids,

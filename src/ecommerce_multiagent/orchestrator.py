@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from .agents import CustomerInvestigator, FulfillmentInvestigator, PaymentInvestigator, PolicyAdjudicator
+from .agents import ClaimValidator, CustomerInvestigator, FulfillmentInvestigator, PaymentInvestigator, PolicyAdjudicator
 from .model_runtime import ModelRuntime, OllamaRuntime
 from .repository import OlistRepository
 from .trace import TraceLogger
@@ -27,6 +27,7 @@ class CaseOrchestrator:
         self.trace = trace
         self.max_corrections = max_corrections
         self.model_runtime = model_runtime or OllamaRuntime("http://127.0.0.1:11434", "off")
+        self.claim_validator = ClaimValidator()
         self.customer = CustomerInvestigator()
         self.payment = PaymentInvestigator()
         self.fulfillment = FulfillmentInvestigator()
@@ -77,12 +78,18 @@ class CaseOrchestrator:
             },
         )
 
+        claim_report = self.claim_validator.investigate(routed["claim_packet"])
+        self.trace.event(case_id, self.claim_validator.name, "claim_validated", output_summary={
+            "claim_truth": claim_report["claim_truth"],
+            "supported_by_db": claim_report["supported_by_db"],
+        })
+
         jobs = {
             "customer_report": (self.customer, routed["customer_packet"]),
             "payment_report": (self.payment, routed["payment_packet"]),
             "fulfillment_report": (self.fulfillment, routed["fulfillment_packet"]),
         }
-        reports: dict[str, dict[str, Any]] = {}
+        reports: dict[str, dict[str, Any]] = {"claim_report": claim_report}
         with ThreadPoolExecutor(max_workers=3, thread_name_prefix=f"{case_id}-investigator") as pool:
             future_names = {
                 pool.submit(self._run_agent, case_id, agent, packet): name

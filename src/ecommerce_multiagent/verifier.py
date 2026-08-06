@@ -69,6 +69,49 @@ class OutputVerifier:
         if draft["customer_context"] != expected_customer_context:
             error("customer_context", "RELATED_ORDER_INVALID", expected_customer_context, draft["customer_context"], "customer_investigator")
 
+        if "claim_report" in bundle:
+            claim_packet = routed["claim_packet"]
+            expected_supported = None
+            status = claim_packet["order"]["order_status"]
+            has_payment = claim_packet["payment_row_count"] > 0
+            has_delivery_dates = bool(claim_packet["order"]["order_estimated_delivery_date"] and claim_packet["order"]["order_delivered_customer_date"])
+            delivered_at = parse_timestamp(claim_packet["order"]["order_delivered_customer_date"])
+            estimated_at = parse_timestamp(claim_packet["order"]["order_estimated_delivery_date"])
+            delivered_late = bool(delivered_at and estimated_at and delivered_at > estimated_at)
+            if status in {"canceled", "unavailable"} and has_payment:
+                expected_truth = "supported"
+                expected_supported = True
+                expected_reason = "order_status_requires_refund"
+            elif has_delivery_dates:
+                if delivered_late:
+                    expected_truth = "supported"
+                    expected_supported = True
+                    expected_reason = "delivered_after_estimate"
+                else:
+                    expected_truth = "unsupported"
+                    expected_supported = False
+                    expected_reason = "delivery_within_estimate_or_no_issue_found"
+            else:
+                expected_truth = "indeterminate"
+                expected_supported = None
+                expected_reason = "insufficient_order_facts"
+            expected_claim_report = {
+                "agent": "claim_validator",
+                "case_id": bundle["case_id"],
+                "claimed_order_id": claim_packet["claimed_order_id"],
+                "claim_message": claim_packet["customer_request"]["message"],
+                "order_status": status,
+                "item_row_count": claim_packet["item_row_count"],
+                "payment_row_count": claim_packet["payment_row_count"],
+                "can_validate_from_db": has_payment or has_delivery_dates,
+                "supported_by_db": expected_supported,
+                "claim_truth": expected_truth,
+                "validation_reason": expected_reason,
+                "warnings": [],
+            }
+            if bundle["claim_report"] != expected_claim_report:
+                error("claim_report", "CLAIM_VALIDATION_MISMATCH", expected_claim_report, bundle["claim_report"], "claim_validator")
+
         # Financial validation is recomputed from raw projected rows, not trusted from an agent.
         raw_items = pp["item_financial_rows"]
         raw_payments = pp["payment_rows"]

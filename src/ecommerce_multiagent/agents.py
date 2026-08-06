@@ -137,6 +137,54 @@ class FulfillmentInvestigator:
         }
 
 
+class ClaimValidator:
+    name = "claim_validator"
+    model_profile = "qwen2.5:7b"
+
+    def investigate(self, packet: dict[str, Any]) -> dict[str, Any]:
+        message = packet["customer_request"]["message"] or ""
+        order = packet["order"]
+        delivered_at = parse_timestamp(order["order_delivered_customer_date"])
+        estimated_at = parse_timestamp(order["order_estimated_delivery_date"])
+        delivered_late = bool(delivered_at and estimated_at and delivered_at > estimated_at)
+        status = order["order_status"]
+        has_payment = packet["payment_row_count"] > 0
+        has_delivery_dates = bool(order["order_estimated_delivery_date"] and order["order_delivered_customer_date"])
+        can_validate = has_payment or has_delivery_dates
+        if status in {"canceled", "unavailable"} and has_payment:
+            claim_truth = "supported"
+            supported_by_db = True
+            reason = "order_status_requires_refund"
+        elif has_delivery_dates:
+            if delivered_late:
+                claim_truth = "supported"
+                supported_by_db = True
+                reason = "delivered_after_estimate"
+            else:
+                claim_truth = "unsupported"
+                supported_by_db = False
+                reason = "delivery_within_estimate_or_no_issue_found"
+        else:
+            claim_truth = "indeterminate"
+            supported_by_db = None
+            reason = "insufficient_order_facts"
+
+        return {
+            "agent": self.name,
+            "case_id": packet["case_id"],
+            "claimed_order_id": packet["claimed_order_id"],
+            "claim_message": message,
+            "order_status": status,
+            "item_row_count": packet["item_row_count"],
+            "payment_row_count": packet["payment_row_count"],
+            "can_validate_from_db": can_validate,
+            "supported_by_db": supported_by_db,
+            "claim_truth": claim_truth,
+            "validation_reason": reason,
+            "warnings": [],
+        }
+
+
 class PolicyAdjudicator:
     name = "policy_adjudicator"
     model_profile = "llama3:8b"

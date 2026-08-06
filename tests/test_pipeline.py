@@ -5,9 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ecommerce_multiagent.agents import CustomerInvestigator, FulfillmentInvestigator, PaymentInvestigator, PolicyAdjudicator
+from ecommerce_multiagent.agents import ClaimValidator, CustomerInvestigator, FulfillmentInvestigator, PaymentInvestigator, PolicyAdjudicator
 from ecommerce_multiagent.repository import OlistRepository
 from ecommerce_multiagent.verifier import OutputVerifier
+from ecommerce_multiagent.model_runtime import _parse_audit_json
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,6 +24,7 @@ class PipelineTests(unittest.TestCase):
         routed = self.repo.route_case(case)
         bundle = {
             "case_id": case["case_id"],
+            "claim_report": ClaimValidator().investigate(routed["claim_packet"]),
             "customer_report": CustomerInvestigator().investigate(routed["customer_packet"]),
             "payment_report": PaymentInvestigator().investigate(routed["payment_packet"]),
             "fulfillment_report": FulfillmentInvestigator().investigate(routed["fulfillment_packet"]),
@@ -69,6 +71,13 @@ class PipelineTests(unittest.TestCase):
                 draft, bundle, routed = self.build(path.name)
                 result = OutputVerifier().verify(draft, bundle, routed)
                 self.assertEqual([], result["errors"])
+
+    def test_local_model_audit_parser_accepts_fenced_json(self) -> None:
+        status, issues = _parse_audit_json(
+            '```json\n{"status":"review","issues":["check total"]}\n```'
+        )
+        self.assertEqual("review", status)
+        self.assertEqual(["check total"], issues)
 
 
 if __name__ == "__main__":

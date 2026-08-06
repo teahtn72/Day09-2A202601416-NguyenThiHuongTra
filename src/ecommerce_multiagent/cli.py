@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .orchestrator import CaseOrchestrator
-from .model_runtime import OllamaRuntime, OpenAIRuntime
+from .model_runtime import HuggingFaceMLXRuntime, OllamaRuntime, OpenAIRuntime
 from .repository import OlistRepository
 from .trace import TraceLogger
 
@@ -35,7 +35,11 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--trace", default="logging/trace.jsonl")
     result.add_argument("--case-concurrency", type=int, default=5)
     result.add_argument("--max-corrections", type=int, default=2)
-    result.add_argument("--model-provider", choices=("ollama", "openai"), default=os.getenv("MODEL_PROVIDER", "ollama"))
+    result.add_argument(
+        "--model-provider",
+        choices=("ollama", "openai", "huggingface"),
+        default=os.getenv("MODEL_PROVIDER", "ollama"),
+    )
     result.add_argument("--model", default=None, help="Override every agent model for the selected provider")
     result.add_argument("--model-mode", choices=("off", "optional", "required"), default=os.getenv("MODEL_MODE", "off"))
     result.add_argument("--ollama-url", default=os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"))
@@ -79,6 +83,11 @@ def main(argv: list[str] | None = None) -> int:
             base_url=args.openai_url,
             mode=args.model_mode,
             timeout=args.model_timeout,
+        )
+    elif args.model_provider == "huggingface":
+        model_runtime = HuggingFaceMLXRuntime(
+            model_path=args.model or "models/Qwen3.5-9B-4bit",
+            mode=args.model_mode,
         )
     else:
         model_runtime = OllamaRuntime(

@@ -255,6 +255,18 @@ python3 run.py --model-provider openai --model gpt-4o-mini --model-mode required
 
 Key được đọc từ `OPENAI_API_KEY` trong `.env` hoặc environment và không bao giờ được ghi vào trace/output.
 
+Chạy local bằng Qwen3.5 9B 4-bit đã tải từ Hugging Face trên Apple Silicon:
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e '.[apple-mlx]'
+.venv/bin/hf download mlx-community/Qwen3.5-9B-4bit --local-dir models/Qwen3.5-9B-4bit
+.venv/bin/python run.py --model-provider huggingface \
+  --model models/Qwen3.5-9B-4bit --model-mode required --case-concurrency 5
+```
+
+Provider này dùng `mlx-vlm`, lazy-load model một lần và khóa phần Metal inference để an toàn giữa các worker. Qwen chỉ audit packet/report có cấu trúc; số tiền, timestamp, evidence, policy priority và output cuối vẫn được tính và xác minh độc lập từ 9 CSV.
+
 Chạy kiểm thử deterministic:
 
 ```bash
